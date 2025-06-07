@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive TSP Solver with Real-time Map</title>
+    <script src="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+            gap: 20px;
+            padding: 20px;
+        }
+
+        .map-container {
+            flex: 2;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+            position: relative;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        .controls-panel {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            max-height: 100%;
+            overflow-y: auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            color: #2d3748;
+            font-size: 24px;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            color: #718096;
+            font-size: 14px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .input-group label {
+            font-weight: 600;
+            color: #2d3748;
+            font-size: 14px;
+        }
+
+        .input-group input, .input-group select {
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .input-group input:focus, .input-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f7fafc;
+            color: #2d3748;
+            border: 2px solid #e2e8f0;
+        }
+
+        .btn-secondary:hover {
+            background: #edf2f7;
+            border-color: #cbd5e0;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #fc8181, #f56565);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(245, 101, 101, 0.4);
+        }
+
+        .points-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 10px;
+            background: #f7fafc;
+        }
+
+        .point-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px;
+            margin-bottom: 5px;
+            background: white;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+
+        .point-coords {
+            color: #4a5568;
+        }
+
+        .point-remove {
+            background: #fed7d7;
+            color: #c53030;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 10px;
+        }
+
+        .results {
+            background: #f0fff4;
+            border: 1px solid #9ae6b4;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+
+        .results h3 {
+            color: #22543d;
+            margin-bottom: 10px;
+        }
+
+        .results p {
+            color: #2f855a;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .instructions {
+            background: #ebf8ff;
+            border: 1px solid #90cdf4;
+            border-radius: 8px;
+            padding: 15px;
+            font-size: 13px;
+            color: #2c5282;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-ready { background-color: #48bb78; }
+        .status-working { background-color: #ed8936; }
+        .status-error { background-color: #f56565; }
+
+        /* Custom numbered marker styles */
+        .numbered-marker {
+            background: #3b82f6;
+            color: white;
+            border: 3px solid white;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            cursor: pointer;
+        }
+
+        .numbered-marker.start {
+            background: #22c55e;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+                height: auto;
+                min-height: 100vh;
+            }
+            
+            .map-container {
+                height: 400px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="map-container">
+            <div id="map"></div>
+        </div>
+        
+        <div class="controls-panel">
+            <div class="header">
+                <h1>🗺️ Interactive TSP Solver</h1>
+                <p>Click on the map to add waypoints, then solve the optimal route!</p>
+            </div>
+
+            <div class="instructions">
+                <strong>How to use:</strong><br>
+                1. Enter your Geoapify API key<br>
+                2. Click on the map to add waypoints<br>
+                3. Configure TSP parameters<br>
+                4. Click "Solve TSP" to find optimal route
+            </div>
+
+            <div class="input-group">
+                <label for="apiKey">🔑 Geoapify API Key</label>
+                <input type="text" id="apiKey" placeholder="Enter your API key here..." value="198f00f10c64466e9168541cb8df922c">
+            </div>
+
+            <div class="input-group">
+                <label for="transportMode">🚗 Transportation Mode</label>
+                <select id="transportMode">
+                    <option value="drive">Driving</option>
+                    <option value="walk">Walking</option>
+                    <option value="bicycle">Bicycle</option>
+                </select>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div class="input-group">
+                    <label for="maxIterations">🔄 Max Iterations</label>
+                    <input type="number" id="maxIterations" value="50" min="10" max="200">
+                </div>
+                <div class="input-group">
+                    <label for="tabuSize">📋 Tabu Size</label>
+                    <input type="number" id="tabuSize" value="15" min="5" max="50">
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label>📍 Waypoints (<span id="pointCount">0</span>)</label>
+                <div class="points-list" id="pointsList">
+                    <p style="text-align: center; color: #a0aec0; font-style: italic;">Click on the map to add waypoints</p>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <button class="btn btn-secondary" onclick="clearPoints()">🗑️ Clear All</button>
+                <button class="btn btn-primary" onclick="solveTSP()">🚀 Solve TSP</button>
+            </div>
+
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Calculating optimal route...</p>
+                <p id="loadingStatus"></p>
+            </div>
+
+            <div id="results"></div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let map;
+        let waypoints = [];
+        let waypointMarkers = [];
+        let routeLayer = null;
+        let arrowLayer = null;
+        let distanceCache = {};
+
+        // Initialize map
+        function initMap() {
+            const apiKey = document.getElementById('apiKey').value;
+            if (!apiKey) {
+                alert('Please enter your Geoapify API key first!');
+                return;
+            }
+
+            map = new maplibregl.Map({
+                container: 'map',
+                style: `https://maps.geoapify.com/v1/styles/osm-bright/style.json?apiKey=${apiKey}`,
+                center: [-98.5795, 39.8283], // Center of USA
+                zoom: 4
+            });
+
+            map.addControl(new maplibregl.NavigationControl());
+
+            // Add click event to map
+            map.on('click', (e) => {
+                addWaypoint(e.lngLat.lat, e.lngLat.lng);
+            });
+
+            // Change cursor on hover
+            map.on('mouseenter', () => {
+                map.getCanvas().style.cursor = 'crosshair';
+            });
+        }
+
+        // Create numbered marker element
+        function createNumberedMarker(number, isStart = false) {
+            const markerElement = document.createElement('div');
+            markerElement.className = `numbered-marker ${isStart ? 'start' : ''}`;
+            markerElement.textContent = number;
+            return markerElement;
+        }
+
+        // Add waypoint to map and list
+        function addWaypoint(lat, lng) {
+            const point = { lat: lat, lng: lng };
+            waypoints.push(point);
+
+            // Create numbered marker
+            const markerNumber = waypoints.length;
+            const isStart = markerNumber === 1;
+            const markerElement = createNumberedMarker(markerNumber, isStart);
+
+            // Add marker to map
+            const marker = new maplibregl.Marker({ element: markerElement })
+                .setLngLat([lng, lat])
+                .setPopup(new maplibregl.Popup().setHTML(`
+                    <strong>Waypoint ${markerNumber}${isStart ? ' (Start)' : ''}</strong><br>
+                    Lat: ${lat.toFixed(6)}<br>
+                    Lng: ${lng.toFixed(6)}
+                `))
+                .addTo(map);
+
+            waypointMarkers.push(marker);
+
+            updatePointsList();
+            updatePointCount();
+        }
+
+        // Remove waypoint
+        function removeWaypoint(index) {
+            waypoints.splice(index, 1);
+            waypointMarkers[index].remove();
+            waypointMarkers.splice(index, 1);
+            
+            // Update all remaining markers with new numbers
+            waypointMarkers.forEach((marker, i) => {
+                const newNumber = i + 1;
+                const isStart = newNumber === 1;
+                const markerElement = createNumberedMarker(newNumber, isStart);
+                marker.setElement(markerElement);
+                
+                // Update popup
+                const point = waypoints[i];
+                marker.setPopup(new maplibregl.Popup().setHTML(`
+                    <strong>Waypoint ${newNumber}${isStart ? ' (Start)' : ''}</strong><br>
+                    Lat: ${point.lat.toFixed(6)}<br>
+                    Lng: ${point.lng.toFixed(6)}
+                `));
+            });
+            
+            updatePointsList();
+            updatePointCount();
+        }
+
+        // Clear all waypoints
+        function clearPoints() {
+            waypoints = [];
+            waypointMarkers.forEach(marker => marker.remove());
+            waypointMarkers = [];
+            
+            // Remove route and arrows if they exist
+            if (routeLayer && map.getLayer('route')) {
+                map.removeLayer('route');
+                map.removeSource('route');
+                routeLayer = null;
+            }
+            
+            if (arrowLayer && map.getLayer('arrows')) {
+                map.removeLayer('arrows');
+                map.removeSource('arrows');
+                arrowLayer = null;
+            }
+            
+            updatePointsList();
+            updatePointCount();
+            document.getElementById('results').innerHTML = '';
+        }
+
+        // Update points list in UI
+        function updatePointsList() {
+            const pointsList = document.getElementById('pointsList');
+            
+            if (waypoints.length === 0) {
+                pointsList.innerHTML = '<p style="text-align: center; color: #a0aec0; font-style: italic;">Click on the map to add waypoints</p>';
+                return;
+            }
+
+            pointsList.innerHTML = waypoints.map((point, index) => `
+                <div class="point-item">
+                    <div>
+                        <strong>Point ${index + 1}${index === 0 ? ' (Start)' : ''}</strong><br>
+                        <span class="point-coords">${point.lat.toFixed(4)}, ${point.lng.toFixed(4)}</span>
+                    </div>
+                    <button class="point-remove" onclick="removeWaypoint(${index})">×</button>
+                </div>
+            `).join('');
+        }
+
+        // Update point count
+        function updatePointCount() {
+            document.getElementById('pointCount').textContent = waypoints.length;
+        }
+
+        // Get route distance using Geoapify API
+        async function getRouteDistance(fromCoords, toCoords, mode = 'drive') {
+            const cacheKey = `${fromCoords.lat},${fromCoords.lng}|${toCoords.lat},${toCoords.lng}|${mode}`;
+            
+            if (distanceCache[cacheKey]) {
+                return distanceCache[cacheKey];
+            }
+
+            const apiKey = document.getElementById('apiKey').value;
+            const waypoints = `${fromCoords.lat},${fromCoords.lng}|${toCoords.lat},${toCoords.lng}`;
+            
+            const url = `https://api.geoapify.com/v1/routing?waypoints=${waypoints}&mode=${mode}&format=json&apiKey=${apiKey}`;
+            
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.results && data.results.length > 0) {
+                    const distance = data.results[0].distance;
+                    distanceCache[cacheKey] = distance;
+                    return distance;
+                } else {
+                    // If no route found, fall back to straight-line distance with penalty
+                    console.warn(`No ${mode} route found, using straight-line distance with penalty`);
+                    const straightDistance = calculateHaversineDistance(fromCoords, toCoords);
+                    const penalizedDistance = straightDistance * (mode === 'walk' ? 1.5 : mode === 'bicycle' ? 1.3 : 1.2);
+                    distanceCache[cacheKey] = penalizedDistance;
+                    return penalizedDistance;
+                }
+            } catch (error) {
+                console.error('API request failed:', error);
+                // Fallback to straight-line distance
+                const straightDistance = calculateHaversineDistance(fromCoords, toCoords);
+                const penalizedDistance = straightDistance * 1.5;
+                distanceCache[cacheKey] = penalizedDistance;
+                return penalizedDistance;
+            }
+        }
+
+        // Calculate straight-line distance using Haversine formula
+        function calculateHaversineDistance(coord1, coord2) {
+            const R = 6371000; // Earth's radius in meters
+            const lat1Rad = coord1.lat * Math.PI / 180;
+            const lat2Rad = coord2.lat * Math.PI / 180;
+            const deltaLat = (coord2.lat - coord1.lat) * Math.PI / 180;
+            const deltaLng = (coord2.lng - coord1.lng) * Math.PI / 180;
+
+            const a = Math.sin(deltaLat/2) * Math.sin(deltaLat/2) +
+                    Math.cos(lat1Rad) * Math.cos(lat2Rad) *
+                    Math.sin(deltaLng/2) * Math.sin(deltaLng/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+            return R * c; // Distance in meters
+        }
+
+        // Create distance matrix
+        async function createDistanceMatrix(points, mode) {
+            const n = points.length;
+            const matrix = Array(n).fill().map(() => Array(n).fill(0));
+            
+            const totalRequests = n * (n - 1);
+            let completedRequests = 0;
+            
+            for (let i = 0; i < n; i++) {
+                for (let j = 0; j < n; j++) {
+                    if (i !== j) {
+                        const distance = await getRouteDistance(points[i], points[j], mode);
+                        matrix[i][j] = distance;
+                        completedRequests++;
+                        
+                        // Update progress
+                        const progress = Math.round((completedRequests / totalRequests) * 100);
+                        document.getElementById('loadingStatus').textContent = 
+                            `Building distance matrix: ${progress}% (${completedRequests}/${totalRequests})`;
+                        
+                        // Small delay to respect rate limits
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                }
+            }
+            
+            return matrix;
+        }
+
+        // Calculate fitness (total distance) for a path
+        function calculateFitness(path, distanceMatrix) {
+            let totalDistance = 0;
+            for (let i = 0; i < path.length; i++) {
+                const from = path[i];
+                const to = path[(i + 1) % path.length];
+                totalDistance += distanceMatrix[from][to];
+            }
+            return totalDistance;
+        }
+
+        // Generate neighbors using 2-opt swap
+        function getNeighbors(currentPath) {
+            const neighbors = [];
+            const n = currentPath.length;
+            
+            for (let i = 0; i < n; i++) {
+                for (let j = i + 1; j < n; j++) {
+                    const newPath = [...currentPath];
+                    [newPath[i], newPath[j]] = [newPath[j], newPath[i]];
+                    neighbors.push(newPath);
+                }
+            }
+            return neighbors;
+        }
+
+        // Tabu Search Algorithm
+        async function tabuSearch(points, distanceMatrix, maxIterations, tabuSize) {
+            const n = points.length;
+            let currentPath = Array.from({length: n}, (_, i) => i);
+            
+            // Shuffle initial path
+            for (let i = currentPath.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [currentPath[i], currentPath[j]] = [currentPath[j], currentPath[i]];
+            }
+            
+            let currentCost = calculateFitness(currentPath, distanceMatrix);
+            let bestPath = [...currentPath];
+            let bestCost = currentCost;
+            
+            const tabuList = [];
+            const history = [];
+            
+            document.getElementById('loadingStatus').textContent = 'Running Tabu Search algorithm...';
+            
+            for (let iteration = 0; iteration < maxIterations; iteration++) {
+                const neighbors = getNeighbors(currentPath);
+                neighbors.sort((a, b) => calculateFitness(a, distanceMatrix) - calculateFitness(b, distanceMatrix));
+                
+                for (const neighbor of neighbors) {
+                    const moveKey = currentPath.join(',') + '->' + neighbor.join(',');
+                    
+                    if (!tabuList.includes(moveKey)) {
+                        currentPath = [...neighbor];
+                        currentCost = calculateFitness(currentPath, distanceMatrix);
+                        
+                        if (currentCost < bestCost) {
+                            bestPath = [...currentPath];
+                            bestCost = currentCost;
+                        }
+                        
+                        tabuList.push(moveKey);
+                        if (tabuList.length > tabuSize) {
+                            tabuList.shift();
+                        }
+                        break;
+                    }
+                }
+                
+                history.push(bestCost);
+                
+                // Update progress
+                const progress = Math.round(((iteration + 1) / maxIterations) * 100);
+                document.getElementById('loadingStatus').textContent = 
+                    `Optimizing route: ${progress}% - Best: ${(bestCost/1000).toFixed(2)} km`;
+                
+                // Allow UI to update
+                await new Promise(resolve => setTimeout(resolve, 10));
+            }
+            
+            return { bestPath, bestCost, history };
+        }
+
+        // Calculate bearing between two points
+        function calculateBearing(lat1, lng1, lat2, lng2) {
+            const dLng = (lng2 - lng1) * Math.PI / 180;
+            const lat1Rad = lat1 * Math.PI / 180;
+            const lat2Rad = lat2 * Math.PI / 180;
+            
+            const y = Math.sin(dLng) * Math.cos(lat2Rad);
+            const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) - Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLng);
+            
+            const bearing = Math.atan2(y, x) * 180 / Math.PI;
+            return (bearing + 360) % 360;
+        }
+
+        // Create arrows along the route
+        function createArrows(path) {
+            const arrows = [];
+            
+            for (let i = 0; i < path.length; i++) {
+                const from = waypoints[path[i]];
+                const to = waypoints[path[(i + 1) % path.length]];
+                
+                // Calculate midpoint
+                const midLat = (from.lat + to.lat) / 2;
+                const midLng = (from.lng + to.lng) / 2;
+                
+                // Calculate bearing
+                const bearing = calculateBearing(from.lat, from.lng, to.lat, to.lng);
+                
+                arrows.push({
+                    type: 'Feature',
+                    properties: {
+                        bearing: bearing,
+                        from: path[i] + 1,
+                        to: path[(i + 1) % path.length] + 1
+                    },
+                    geometry: {
+                        type: 'Point',
+                        coordinates: [midLng, midLat]
+                    }
+                });
+            }
+            
+            return {
+                type: 'FeatureCollection',
+                features: arrows
+            };
+        }
+
+        // Draw route and arrows on map
+        async function drawRoute(path) {
+            const apiKey = document.getElementById('apiKey').value;
+            const mode = document.getElementById('transportMode').value;
+            
+            // Create waypoints string for the full route
+            const routeWaypoints = path.map(i => `${waypoints[i].lat},${waypoints[i].lng}`).join('|');
+            const url = `https://api.geoapify.com/v1/routing?waypoints=${routeWaypoints}&mode=${mode}&format=json&apiKey=${apiKey}`;
+            
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.results && data.results.length > 0) {
+                    const geometry = data.results[0].geometry;
+                    
+                    // Remove existing route
+                    if (routeLayer && map.getLayer('route')) {
+                        map.removeLayer('route');
+                        map.removeSource('route');
+                    }
+                    
+                    // Add new route
+                    map.addSource('route', {
+                        type: 'geojson',
+                        data: {
+                            type: 'Feature',
+                            geometry: geometry
+                        }
+                    });
+                    
+                    map.addLayer({
+                        id: 'route',
+                        type: 'line',
+                        source: 'route',
+                        paint: {
+                            'line-color': '#22c55e',
+                            'line-width': 4,
+                            'line-opacity': 0.8
+                        }
+                    });
+                    
+                    routeLayer = true;
+                }
+            } catch (error) {
+                console.error('Failed to draw route:', error);
+            }
+            
+            // Always add arrows (even if route drawing fails)
+            addArrows(path);
+        }
+
+        // Add directional arrows to the map
+        function addArrows(path) {
+            // Remove existing arrows
+            if (arrowLayer && map.getLayer('arrows')) {
+                map.removeLayer('arrows');
+                map.removeSource('arrows');
+            }
+            
+            // Create arrow data
+            const arrowData = createArrows(path);
+            
+            // Add arrows source
+            map.addSource('arrows', {
+                type: 'geojson',
+                data: arrowData
+            });
+            
+            // Add arrows layer
+            map.addLayer({
+                id: 'arrows',
+                type: 'symbol',
+                source: 'arrows',
+                layout: {
+                    'icon-image': 'arrow',
+                    'icon-size': 0.8,
+                    'icon-rotate': ['get', 'bearing'],
+                    'icon-rotation-alignment': 'map',
+                    'icon-allow-overlap': true,
+                    'icon-ignore-placement': true
+                }
+            });
+            
+            // Load arrow icon if not already loaded
+            if (!map.hasImage('arrow')) {
+                // Create arrow SVG
+                const arrowSvg = `
+                    <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2 L22 12 L12 22 L12 16 L2 16 L2 8 L12 8 Z" 
+                              fill="#22c55e" stroke="white" stroke-width="2"/>
+                    </svg>
+                `;
+                
+                // Convert SVG to image
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 24;
+                    canvas.height = 24;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    
+                    map.addImage('arrow', canvas);
+                    arrowLayer = true;
+                };
+                img.src = 'data:image/svg+xml;base64,' + btoa(arrowSvg);
+            } else {
+                arrowLayer = true;
+            }
+        }
+
+        // Main TSP solver function
+        async function solveTSP() {
+            if (waypoints.length < 2) {
+                alert('Please add at least 2 waypoints to solve TSP!');
+                return;
+            }
+
+            const apiKey = document.getElementById('apiKey').value;
+            if (!apiKey) {
+                alert('Please enter your Geoapify API key!');
+                return;
+            }
+
+            // Show loading
+            document.getElementById('loading').classList.add('show');
+            document.getElementById('results').innerHTML = '';
+
+            try {
+                const mode = document.getElementById('transportMode').value;
+                const maxIterations = parseInt(document.getElementById('maxIterations').value);
+                const tabuSize = parseInt(document.getElementById('tabuSize').value);
+
+                const startTime = Date.now();
+
+                // Create distance matrix
+                const distanceMatrix = await createDistanceMatrix(waypoints, mode);
+
+                // Check if we have any valid routes
+                let hasValidRoutes = false;
+                for (let i = 0; i < distanceMatrix.length; i++) {
+                    for (let j = 0; j < distanceMatrix[i].length; j++) {
+                        if (i !== j && distanceMatrix[i][j] !== Infinity && distanceMatrix[i][j] > 0) {
+                            hasValidRoutes = true;
+                            break;
+                        }
+                    }
+                    if (hasValidRoutes) break;
+                }
+
+                if (!hasValidRoutes) {
+                    throw new Error(`No valid ${mode} routes found between waypoints. Try using driving mode or placing waypoints closer together.`);
+                }
+
+                // Run TSP algorithm
+                const { bestPath, bestCost, history } = await tabuSearch(waypoints, distanceMatrix, maxIterations, tabuSize);
+
+                const endTime = Date.now();
+                const totalTime = (endTime - startTime) / 1000;
+
+                // Draw route and arrows on map
+                await drawRoute(bestPath);
+
+                // Display results with actual waypoint numbers
+                const routeOrder = bestPath.map(i => `Point ${i + 1}`).join(' → ');
+                
+                document.getElementById('results').innerHTML = `
+                    <div class="results">
+                        <h3>🎉 TSP Solution Found!</h3>
+                        <p><strong>Best Route Distance:</strong> ${(bestCost/1000).toFixed(2)} km</p>
+                        <p><strong>Total Time:</strong> ${totalTime.toFixed(2)} seconds</p>
+                        <p><strong>Route Order:</strong> ${routeOrder}</p>
+                        <p><strong>Transportation Mode:</strong> ${mode.charAt(0).toUpperCase() + mode.slice(1)}</p>
+                        <p><strong>Visual Guide:</strong> Follow the green route line and arrows on the map</p>
+                        ${mode !== 'drive' ? '<p><em>Note: Non-driving routes use estimated distances where exact routes are unavailable.</em></p>' : ''}
+                    </div>
+                `;
+
+            } catch (error) {
+                console.error('TSP solving failed:', error);
+                document.getElementById('results').innerHTML = `
+                    <div style="background: #fed7d7; border: 1px solid #fc8181; border-radius: 8px; padding: 15px; color: #c53030;">
+                        <h3>❌ Error</h3>
+                        <p>Failed to solve TSP: ${error.message}</p>
+                        <p><strong>Suggestions:</strong></p>
+                        <ul style="margin-top: 10px;">
+                            <li>Try using "Driving" mode instead</li>
+                            <li>Place waypoints closer together</li>
+                            <li>Ensure waypoints are in areas with good connectivity</li>
+                        </ul>
+                    </div>
+                `;
+            } finally {
+                // Hide loading
+                document.getElementById('loading').classList.remove('show');
+            }
+        }
+
+        // Initialize map when API key is provided
+        document.getElementById('apiKey').addEventListener('blur', () => {
+            if (document.getElementById('apiKey').value && !map) {
+                initMap();
+            }
+        });
+
+        // Auto-initialize if API key is already provided
+        window.addEventListener('load', () => {
+            if (document.getElementById('apiKey').value) {
+                initMap();
+            }
+        });
+        
+    </script>
+</body>
+</html>
